@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -132,8 +132,6 @@ namespace ShoppingCartApp
                         var product = new Produs(name ?? "Necunoscut", price);
                         cart.AddProduct(product, quantity);
                         break;
-
-
 
                     case "2":
                         Console.Write("Nume produs de eliminat: ");
