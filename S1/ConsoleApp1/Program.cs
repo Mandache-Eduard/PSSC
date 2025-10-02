@@ -49,11 +49,11 @@ namespace ShoppingCartApp
             if (item != null)
             {
                 _items.Remove(item);
-                Console.WriteLine($"{productName} eliminat din coș.");
+                Console.WriteLine($"{productName} eliminat din cos.");
             }
             else
             {
-                Console.WriteLine("Produsul nu a fost găsit în coș.");
+                Console.WriteLine("Produsul nu a fost gasit în coș.");
             }
         }
 
@@ -61,11 +61,11 @@ namespace ShoppingCartApp
         {
             if (!_items.Any())
             {
-                Console.WriteLine("Coșul este gol.");
+                Console.WriteLine("Cosul este gol.");
                 return;
             }
 
-            Console.WriteLine("=== Coșul curent ===");
+            Console.WriteLine("=== Cosul curent ===");
             foreach (var item in _items)
             {
                 Console.WriteLine($"{item.Produs.Name} - {item.Cantitate.GetValue()} - Total: {item.GetTotalPrice()}");
@@ -99,10 +99,10 @@ namespace ShoppingCartApp
                 Console.WriteLine("\n=================");
                 Console.WriteLine("1. Adauga produs");
                 Console.WriteLine("2. Elimina produs");
-                Console.WriteLine("3. Afisează cos");
-                Console.WriteLine("4. Ieșire");
+                Console.WriteLine("3. Afiseaza cos");
+                Console.WriteLine("4. Iesire");
                 Console.WriteLine("\n=================");
-                Console.Write("Alege opțiunea: ");
+                Console.Write("Alege optiunea: ");
 
                 var option = Console.ReadLine();
 
@@ -147,7 +147,7 @@ namespace ShoppingCartApp
                         return;
 
                     default:
-                        Console.WriteLine("Opțiune invalidă.");
+                        Console.WriteLine("Optiune invalida.");
                         break;
                 }
             }
