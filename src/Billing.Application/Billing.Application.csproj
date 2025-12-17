@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- Billing.Application: Application services, workflows, event handlers -->
+  <ItemGroup>
+    <ProjectReference Include="../Billing.Domain/Billing.Domain.csproj" />
+    <ProjectReference Include="../Billing.Infrastructure/Billing.Infrastructure.csproj" />
+    <ProjectReference Include="../Shared.Contracts/Shared.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MassTransit" Version="8.2.0" />
+  </ItemGroup>
+
+</Project>
+

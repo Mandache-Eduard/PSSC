@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- Shipping.Domain: Pure domain logic for shipments and fulfillment -->
+  <ItemGroup>
+    <ProjectReference Include="../Shared.Contracts/Shared.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>
+
