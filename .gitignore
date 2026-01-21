@@ -3,6 +3,9 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+# Lab examples
+PSSC/Examples/
+
 # dotenv files
 .env
 
@@ -482,3 +485,13 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+Examples/L2/Examples.sln
+Examples/L2/Exemple/Domain/Exceptions/InvalidGradeException.cs
+Examples/L2/Exemple/Domain/Exceptions/InvalidStudentRegistrationNumberException.cs
+Examples/L2/Exemple/Domain/Models/Exam.cs
+Examples/L2/Exemple/Domain/Models/Grade.cs
+Examples/L2/Exemple/Domain/Models/StudentRegistrationNumber.cs
+Examples/L2/Exemple/Domain/Models/UnvalidatedStudentGrade.cs
+Examples/L2/Exemple/Domain/Models/ValidatedStudentGrade.cs
+Examples/L2/Exemple/Examples.csproj
+Examples/L2/Exemple/Program.cs
