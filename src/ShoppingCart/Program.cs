@@ -1,131 +1,207 @@
-﻿﻿namespace ShoppingCart;
-
-class Program
+using ShoppingCart.Domain.Models;
+using System;
+using System.Linq;
+using static ShoppingCart.Domain.Models.Cart;
+namespace ShoppingCart
 {
-    static void Main(string[] args)
+    internal class Program
     {
-        var cart = new Cart();
-        bool running = true;
-
-        Console.WriteLine("Welcome to the Shopping Cart Application!");
-
-        while (running)
+        private static ShoppingCartEntity? _cart;
+        private static Customer? _currentCustomer;
+        static void Main(string[] args)
         {
-            DisplayMenu();
-            var choice = Console.ReadLine();
-
-            switch (choice)
+            Console.WriteLine("=== Shopping Cart Application ===\n");
+            InitializeCustomer();
+            _cart = new ShoppingCartEntity(_currentCustomer!);
+            Console.WriteLine($"\n{_cart}");
+            Console.WriteLine($"State: {_cart.GetCartStateDescription()}\n");
+            bool running = true;
+            while (running)
             {
-                case "1":
-                    AddProductToCart(cart);
-                    break;
-                case "2":
-                    RemoveProductFromCart(cart);
-                    break;
-                case "3":
-                    cart.DisplayCart();
-                    break;
-                case "4":
-                    running = false;
-                    Console.WriteLine("Thank you for using the Shopping Cart Application!");
-                    break;
-                default:
-                    Console.WriteLine("Invalid option. Please try again.");
-                    break;
+                DisplayMenu();
+                string? choice = Console.ReadLine();
+                try
+                {
+                    switch (choice)
+                    {
+                        case "1":
+                            AddProductToCart();
+                            break;
+                        case "2":
+                            DisplayCartContents();
+                            break;
+                        case "3":
+                            TransitionCartState();
+                            break;
+                        case "4":
+                            DisplayCustomerInfo();
+                            break;
+                        case "5":
+                            running = false;
+                            Console.WriteLine("Thank you for using the Shopping Cart Application!");
+                            break;
+                        default:
+                            Console.WriteLine("Invalid choice. Please try again.");
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                }
+                Console.WriteLine();
             }
-            
-            if (running)
+        }
+        private static void InitializeCustomer()
+        {
+            Console.Write("Enter your name: ");
+            string? name = Console.ReadLine();
+            Console.Write("Enter your email: ");
+            string? email = Console.ReadLine();
+            _currentCustomer = new Customer(
+                string.IsNullOrWhiteSpace(name) ? "Guest" : name,
+                string.IsNullOrWhiteSpace(email) ? "guest@example.com" : email
+            );
+            Console.WriteLine($"\nWelcome, {_currentCustomer.Name}!");
+        }
+        private static void DisplayMenu()
+        {
+            Console.WriteLine("--- Menu ---");
+            Console.WriteLine("1. Add Product to Cart");
+            Console.WriteLine("2. Display Cart Contents");
+            Console.WriteLine("3. Transition Cart State");
+            Console.WriteLine("4. Display Customer Info");
+            Console.WriteLine("5. Exit");
+            Console.Write("Choose an option: ");
+        }
+        private static void AddProductToCart()
+        {
+            Console.WriteLine("\n--- Add Product ---");
+            Console.Write("Product Code (format XX1234, e.g., AB1234): ");
+            string? codeInput = Console.ReadLine();
+            ProductCode code = new ProductCode(codeInput!);
+            Console.Write("Product Name: ");
+            string? name = Console.ReadLine();
+            Console.Write("Price: ");
+            decimal price = decimal.Parse(Console.ReadLine()!);
+            Console.Write("Quantity: ");
+            decimal quantityValue = decimal.Parse(Console.ReadLine()!);
+            Quantity quantity = new Quantity(quantityValue);
+            ProductItem product = new ProductItem(code, name!, price, quantity);
+            _cart!.AddProduct(product);
+            Console.WriteLine($"\nProduct added successfully!");
+            Console.WriteLine($"Current state: {_cart.GetCartStateDescription()}");
+        }
+        private static void DisplayCartContents()
+        {
+            Console.WriteLine("\n--- Cart Contents ---");
+            Console.WriteLine($"Cart ID: {_cart!.Id}");
+            Console.WriteLine($"State: {_cart.GetCartStateDescription()}");
+            Console.WriteLine();
+            string cartDetails = _cart.CurrentState switch
             {
-                Console.WriteLine("\nPress any key to continue...");
-                Console.ReadKey();
-                Console.Clear();
+                EmptyCart => "The cart is empty.",
+                UnvalidatedCart unvalidated => DisplayUnvalidatedCart(unvalidated),
+                ValidatedCart validated => DisplayValidatedCart(validated),
+                PaidCart paid => DisplayPaidCart(paid),
+                _ => "Unknown cart state"
+            };
+            Console.WriteLine(cartDetails);
+        }
+        private static string DisplayUnvalidatedCart(UnvalidatedCart cartState)
+        {
+            var result = "Products in cart (not validated):\n";
+            int index = 1;
+            foreach (var product in cartState.Products)
+            {
+                result += $"{index++}. {product}\n";
+            }
+            decimal total = cartState.Products.Sum(p => (decimal)p.TotalPrice);
+            result += $"\nEstimated Total: {total:C}";
+            return result;
+        }
+        private static string DisplayValidatedCart(ValidatedCart cartState)
+        {
+            var result = "Products in cart (validated):\n";
+            int index = 1;
+            foreach (var product in cartState.Products)
+            {
+                result += $"{index++}. {product}\n";
+            }
+            result += $"\nTotal: {cartState.TotalPrice:C}";
+            result += "\nCart is ready for payment!";
+            return result;
+        }
+        private static string DisplayPaidCart(PaidCart cartState)
+        {
+            var result = "Products in cart (paid):\n";
+            int index = 1;
+            foreach (var product in cartState.Products)
+            {
+                result += $"{index++}. {product}\n";
+            }
+            result += $"\nTotal: {cartState.TotalPrice:C}";
+            result += $"\nPaid on: {cartState.PaidDate:g}";
+            result += $"\nShipping to: {cartState.ShippingAddress}";
+            return result;
+        }
+        private static void TransitionCartState()
+        {
+            Console.WriteLine("\n--- Transition Cart State ---");
+            Console.WriteLine($"Current state: {_cart!.GetCartStateDescription()}");
+            Console.WriteLine();
+            var availableTransitions = _cart.CurrentState switch
+            {
+                EmptyCart => "No transitions available. Please add products first.",
+                UnvalidatedCart => "1. Validate Cart",
+                ValidatedCart => "1. Process Payment",
+                PaidCart => "Cart is already paid. No further transitions.",
+                _ => "Unknown state"
+            };
+            Console.WriteLine("Available transitions:");
+            Console.WriteLine(availableTransitions);
+            if (_cart.CurrentState is UnvalidatedCart or ValidatedCart)
+            {
+                Console.Write("\nChoose transition (1): ");
+                string? choice = Console.ReadLine();
+                if (choice == "1")
+                {
+                    if (_cart.CurrentState is UnvalidatedCart)
+                    {
+                        _cart.ValidateCart();
+                        Console.WriteLine("Cart validated successfully!");
+                    }
+                    else if (_cart.CurrentState is ValidatedCart)
+                    {
+                        ProcessPaymentTransition();
+                    }
+                }
             }
         }
-    }
-
-    static void DisplayMenu()
-    {
-        Console.WriteLine("\n=== Shopping Cart Menu ===");
-        Console.WriteLine("1. Add Product");
-        Console.WriteLine("2. Remove Product");
-        Console.WriteLine("3. Display Cart");
-        Console.WriteLine("4. Exit");
-        Console.Write("\nSelect an option: ");
-    }
-
-    static void AddProductToCart(Cart cart)
-    {
-        Console.Write("\nEnter product name: ");
-        var name = Console.ReadLine();
-
-        if (string.IsNullOrWhiteSpace(name))
+        private static void ProcessPaymentTransition()
         {
-            Console.WriteLine("Product name cannot be empty.");
-            return;
+            Console.WriteLine("\n--- Enter Shipping Address ---");
+            Console.Write("Street: ");
+            string? street = Console.ReadLine();
+            Console.Write("City: ");
+            string? city = Console.ReadLine();
+            Console.Write("Postal Code: ");
+            string? postalCode = Console.ReadLine();
+            Console.Write("Country: ");
+            string? country = Console.ReadLine();
+            Address shippingAddress = new Address(street!, city!, postalCode!, country!);
+            _currentCustomer!.UpdateShippingAddress(shippingAddress);
+            _cart!.ProcessPayment(shippingAddress);
+            Console.WriteLine("Payment processed successfully!");
         }
-
-        Console.Write("Enter price per unit or kilogram: $");
-        if (!decimal.TryParse(Console.ReadLine(), out decimal price) || price < 0)
+        private static void DisplayCustomerInfo()
         {
-            Console.WriteLine("Invalid price.");
-            return;
+            Console.WriteLine("\n--- Customer Information ---");
+            Console.WriteLine(_currentCustomer!.ToString());
+            if (_currentCustomer.ShippingAddress != null)
+            {
+                Console.WriteLine($"Shipping Address: {_currentCustomer.ShippingAddress}");
+            }
         }
-
-        Console.WriteLine("Select quantity type:");
-        Console.WriteLine("1. Units");
-        Console.WriteLine("2. Kilograms");
-        Console.Write("Choice: ");
-        var quantityType = Console.ReadLine();
-
-        IQuantity quantity;
-
-        switch (quantityType)
-        {
-            case "1":
-                Console.Write("Enter number of units: ");
-                if (!int.TryParse(Console.ReadLine(), out int units) || units <= 0)
-                {
-                    Console.WriteLine("Invalid unit quantity.");
-                    return;
-                }
-                quantity = new UnitQuantity(units);
-                break;
-            case "2":
-                Console.Write("Enter weight in kilograms: ");
-                if (!decimal.TryParse(Console.ReadLine(), out decimal kg) || kg <= 0)
-                {
-                    Console.WriteLine("Invalid kilogram quantity.");
-                    return;
-                }
-                quantity = new KilogramQuantity(kg);
-                break;
-            default:
-                Console.WriteLine("Invalid quantity type.");
-                return;
-        }
-
-        var product = new Product(name, price, quantity);
-        cart.AddProduct(product);
-    }
-
-    static void RemoveProductFromCart(Cart cart)
-    {
-        if (cart.Products.Count == 0)
-        {
-            Console.WriteLine("\nYour cart is empty. Nothing to remove.");
-            return;
-        }
-
-        cart.DisplayCart();
-        Console.Write("\nEnter the number of the product to remove: ");
-        
-        if (!int.TryParse(Console.ReadLine(), out int index))
-        {
-            Console.WriteLine("Invalid input.");
-            return;
-        }
-
-        cart.RemoveProduct(index - 1);
     }
 }
-
