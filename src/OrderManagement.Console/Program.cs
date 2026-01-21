@@ -6,6 +6,7 @@ using System.Linq;
 using static OrderManagement.Domain.Models.OrderPlacedEvent;
 using static OrderManagement.Domain.Models.OrderCancelledEvent;
 using static OrderManagement.Domain.Models.OrderModifiedEvent;
+using static OrderManagement.Domain.Models.OrderReturnedEvent;
 namespace OrderManagement.Console
 {
     internal class Program
@@ -39,8 +40,9 @@ namespace OrderManagement.Console
                 System.Console.WriteLine("1. Place New Order");
                 System.Console.WriteLine("2. Modify Existing Order");
                 System.Console.WriteLine("3. Cancel Existing Order");
-                System.Console.WriteLine("4. View Placed Orders");
-                System.Console.WriteLine("5. Exit");
+                System.Console.WriteLine("4. Return Order");
+                System.Console.WriteLine("5. View Placed Orders");
+                System.Console.WriteLine("6. Exit");
                 System.Console.Write("\nChoose an option: ");
                 string? choice = System.Console.ReadLine();
                 switch (choice)
@@ -55,9 +57,12 @@ namespace OrderManagement.Console
                         CancelExistingOrder();
                         break;
                     case "4":
-                        ViewPlacedOrders();
+                        ReturnOrder();
                         break;
                     case "5":
+                        ViewPlacedOrders();
+                        break;
+                    case "6":
                         System.Console.WriteLine("\nThank you for using Order Management System!");
                         return;
                     default:
@@ -171,7 +176,7 @@ namespace OrderManagement.Console
             foreach (var order in Orders.Where(o => o.Value.Status == "Confirmed"))
             {
                 TimeSpan timeSince = DateTime.Now - order.Value.OrderDate;
-                string modifiable = timeSince.TotalHours <= 24 ? "✓ Can modify" : "✗ Too old";
+                string modifiable = timeSince.TotalHours <= 48 ? "✓ Can modify" : "✗ Too old";
                 System.Console.WriteLine($"  {order.Key} - Total: {order.Value.TotalAmount:C} - Placed: {order.Value.OrderDate:g} - {modifiable}");
             }
             System.Console.WriteLine();
@@ -222,6 +227,94 @@ namespace OrderManagement.Console
             System.Console.WriteLine(message);
             System.Console.WriteLine("\nPress any key to continue...");
             System.Console.ReadKey();
+        }
+
+        private static void ReturnOrder()
+        {
+            System.Console.Clear();
+            System.Console.WriteLine("=== RETURN ORDER ===\n");
+
+            if (Orders.Count == 0)
+            {
+                System.Console.WriteLine("No orders available to return.");
+                System.Console.WriteLine("\nPress any key to continue...");
+                System.Console.ReadKey();
+                return;
+            }
+
+            System.Console.WriteLine("Available orders for return:");
+            foreach (var order in Orders.Where(o => o.Value.Status == "Confirmed"))
+            {
+                TimeSpan timeSince = DateTime.Now - order.Value.OrderDate;
+                string returnable = timeSince.TotalDays <= 14 ? "✓ Can return" : "✗ Return window expired";
+                System.Console.WriteLine($"  {order.Key} - Total: {order.Value.TotalAmount:C} - Placed: {order.Value.OrderDate:g} - {returnable}");
+            }
+            System.Console.WriteLine();
+
+            System.Console.Write("Enter Order Number to return: ");
+            string? orderNumber = System.Console.ReadLine();
+
+            System.Console.WriteLine("\nReturn Reason Categories:");
+            System.Console.WriteLine("  - Defective/Damaged/Broken = No shipping fee");
+            System.Console.WriteLine("  - Wrong/Incorrect item = No shipping fee");
+            System.Console.WriteLine("  - Not as described = No shipping fee");
+            System.Console.WriteLine("  - Changed mind = Customer pays shipping fee ($15.00)");
+            System.Console.WriteLine();
+            System.Console.Write("Enter Return Reason (min 10 characters): ");
+            string? returnReason = System.Console.ReadLine();
+
+            System.Console.WriteLine("\n=== Items to Return ===");
+            List<UnvalidatedReturnItem> returnItems = ReadReturnItems();
+
+            if (returnItems.Count == 0)
+            {
+                System.Console.WriteLine("\nNo items specified. Return cancelled.");
+                System.Console.ReadKey();
+                return;
+            }
+
+            // Create command and execute workflow
+            ReturnOrderCommand command = new(orderNumber!, returnReason!, returnItems);
+            ReturnOrderWorkflow workflow = new();
+            IOrderReturnedEvent result = workflow.Execute(command, CheckOrderExists);
+
+            // Display result
+            System.Console.WriteLine("\n========================================");
+            System.Console.WriteLine("RETURN RESULT:");
+            System.Console.WriteLine("========================================");
+
+            string message = result switch
+            {
+                OrderReturnedSuccessEvent successEvent => HandleReturnOrderSuccess(successEvent),
+                OrderReturnedFailedEvent failedEvent => FormatReturnOrderFailure(failedEvent),
+                _ => throw new NotImplementedException()
+            };
+
+            System.Console.WriteLine(message);
+            System.Console.WriteLine("\nPress any key to continue...");
+            System.Console.ReadKey();
+        }
+
+        private static List<UnvalidatedReturnItem> ReadReturnItems()
+        {
+            List<UnvalidatedReturnItem> items = new();
+            System.Console.WriteLine("Enter items to return (press Enter with empty product code to finish):");
+
+            while (true)
+            {
+                System.Console.Write("\nProduct Code: ");
+                string? productCode = System.Console.ReadLine();
+
+                if (string.IsNullOrEmpty(productCode))
+                    break;
+
+                System.Console.Write("Quantity: ");
+                string? quantity = System.Console.ReadLine();
+
+                items.Add(new UnvalidatedReturnItem(productCode, quantity!));
+            }
+
+            return items;
         }
 
         private static void ViewPlacedOrders()
@@ -289,7 +382,7 @@ namespace OrderManagement.Console
         private static string HandlePlaceOrderSuccess(OrderPlacedSuccessEvent @event)
         {
             // Store the order in our simulated database
-            Orders[@event.OrderNumber] = new OrderDetails(
+            Orders[@event.OrderNumber] = OrderDetails.Create(
                 @event.TotalPrice,
                 @event.PlacedDate,
                 "Confirmed"
@@ -304,7 +397,7 @@ Order placed on: {@event.PlacedDate:g}";
             if (Orders.ContainsKey(@event.OrderNumber))
             {
                 var order = Orders[@event.OrderNumber];
-                Orders[@event.OrderNumber] = new OrderDetails(
+                Orders[@event.OrderNumber] = OrderDetails.Create(
                     order.TotalAmount,
                     order.OrderDate,
                     "Cancelled"
@@ -319,13 +412,28 @@ Order placed on: {@event.PlacedDate:g}";
             if (Orders.ContainsKey(@event.OrderNumber))
             {
                 var order = Orders[@event.OrderNumber];
-                Orders[@event.OrderNumber] = new OrderDetails(
-                    order.TotalAmount,
+                Orders[@event.OrderNumber] = OrderDetails.Create(
+                    @event.NewTotalPrice,
                     order.OrderDate,
                     "Confirmed"
                 );
             }
             return $@"✓ ORDER MODIFIED SUCCESSFULLY!
+{@event.Summary}";
+        }
+        private static string HandleReturnOrderSuccess(OrderReturnedSuccessEvent @event)
+        {
+            // Update order status in our simulated database
+            if (Orders.ContainsKey(@event.OrderNumber))
+            {
+                var order = Orders[@event.OrderNumber];
+                Orders[@event.OrderNumber] = OrderDetails.Create(
+                    order.TotalAmount,
+                    order.OrderDate,
+                    "Returned"
+                );
+            }
+            return $@"✓ ORDER RETURNED SUCCESSFULLY!
 {@event.Summary}";
         }
         private static string FormatPlaceOrderFailure(OrderPlacedFailedEvent @event)
@@ -348,5 +456,13 @@ The following errors occurred:
 {string.Join("\n", @event.Reasons.Select(r => $"  • {r}"))}
 Please correct the errors and try again.";
         }
+        private static string FormatReturnOrderFailure(OrderReturnedFailedEvent @event)
+        {
+            return $@"✗ RETURN FAILED
+The following errors occurred:
+{string.Join("\n", @event.Reasons.Select(r => $"  • {r}"))}
+Please correct the errors and try again.";
+        }
     }
 }
+

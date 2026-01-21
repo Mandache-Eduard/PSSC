@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+
 namespace OrderManagement.Domain.Models
 {
     public static class CancelOrderRequest
@@ -130,11 +132,28 @@ namespace OrderManagement.Domain.Models
         public decimal TotalAmount { get; }
         public DateTime OrderDate { get; }
         public string Status { get; }
-        public OrderDetails(decimal totalAmount, DateTime orderDate, string status)
+
+        private OrderDetails(decimal totalAmount, DateTime orderDate, string status)
         {
             TotalAmount = totalAmount;
             OrderDate = orderDate;
             Status = status;
+        }
+
+        public static OrderDetails Create(decimal totalAmount, DateTime orderDate, string status)
+        {
+            if (totalAmount < 0)
+                throw new ArgumentException("Total amount must be non-negative", nameof(totalAmount));
+
+            if (string.IsNullOrWhiteSpace(status))
+                throw new ArgumentException("Status is required", nameof(status));
+
+            // Validate that status is one of the expected values
+            var validStatuses = new[] { "Confirmed", "Cancelled", "Returned", "Shipped", "Delivered" };
+            if (!validStatuses.Contains(status))
+                throw new ArgumentException($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}", nameof(status));
+
+            return new OrderDetails(totalAmount, orderDate, status);
         }
     }
 }

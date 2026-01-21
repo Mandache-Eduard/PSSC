@@ -35,15 +35,15 @@ namespace OrderManagement.Domain.Operations
                     new[] { $"Order {request.OrderNumber} cannot be modified. Current status: {orderDetails.Status}. Only confirmed orders can be modified." }
                 );
             }
-            // Business rule: Orders can only be modified within 24 hours of placement
+            // Business rule: Orders can only be modified within 48 hours of placement
             TimeSpan timeSinceOrder = DateTime.Now - orderDetails.OrderDate;
-            if (timeSinceOrder.TotalHours > 24)
+            if (timeSinceOrder.TotalHours > 48)
             {
                 var unvalidatedLines = request.NewOrderLines.Select(l =>
                     new UnvalidatedOrderLine(l.ProductCode.Value, l.Quantity.Value.ToString())).ToList();
                 return new InvalidModifyRequest(
                     request.OrderNumber.Value,
-                    new[] { $"Order {request.OrderNumber} cannot be modified. Orders can only be modified within 24 hours of placement. This order was placed {timeSinceOrder.TotalHours:F1} hours ago." }
+                    new[] { $"Order {request.OrderNumber} cannot be modified. Orders can only be modified within 48 hours of placement. This order was placed {timeSinceOrder.TotalHours:F1} hours ago." }
                 );
             }
             // Order exists and can be modified
