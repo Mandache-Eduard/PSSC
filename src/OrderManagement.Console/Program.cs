@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using static OrderManagement.Domain.Models.OrderPlacedEvent;
 using static OrderManagement.Domain.Models.OrderCancelledEvent;
+using static OrderManagement.Domain.Models.OrderModifiedEvent;
 namespace OrderManagement.Console
 {
     internal class Program
@@ -36,9 +37,10 @@ namespace OrderManagement.Console
                 System.Console.Clear();
                 System.Console.WriteLine("=== Order Management System ===\n");
                 System.Console.WriteLine("1. Place New Order");
-                System.Console.WriteLine("2. Cancel Existing Order");
-                System.Console.WriteLine("3. View Placed Orders");
-                System.Console.WriteLine("4. Exit");
+                System.Console.WriteLine("2. Modify Existing Order");
+                System.Console.WriteLine("3. Cancel Existing Order");
+                System.Console.WriteLine("4. View Placed Orders");
+                System.Console.WriteLine("5. Exit");
                 System.Console.Write("\nChoose an option: ");
                 string? choice = System.Console.ReadLine();
                 switch (choice)
@@ -47,12 +49,15 @@ namespace OrderManagement.Console
                         PlaceNewOrder();
                         break;
                     case "2":
-                        CancelExistingOrder();
+                        ModifyExistingOrder();
                         break;
                     case "3":
-                        ViewPlacedOrders();
+                        CancelExistingOrder();
                         break;
                     case "4":
+                        ViewPlacedOrders();
+                        break;
+                    case "5":
                         System.Console.WriteLine("\nThank you for using Order Management System!");
                         return;
                     default:
@@ -148,6 +153,77 @@ namespace OrderManagement.Console
             System.Console.WriteLine("\nPress any key to continue...");
             System.Console.ReadKey();
         }
+
+        private static void ModifyExistingOrder()
+        {
+            System.Console.Clear();
+            System.Console.WriteLine("=== MODIFY ORDER ===\n");
+
+            if (Orders.Count == 0)
+            {
+                System.Console.WriteLine("No orders available to modify.");
+                System.Console.WriteLine("\nPress any key to continue...");
+                System.Console.ReadKey();
+                return;
+            }
+
+            System.Console.WriteLine("Available orders for modification:");
+            foreach (var order in Orders.Where(o => o.Value.Status == "Confirmed"))
+            {
+                TimeSpan timeSince = DateTime.Now - order.Value.OrderDate;
+                string modifiable = timeSince.TotalHours <= 24 ? "✓ Can modify" : "✗ Too old";
+                System.Console.WriteLine($"  {order.Key} - Total: {order.Value.TotalAmount:C} - Placed: {order.Value.OrderDate:g} - {modifiable}");
+            }
+            System.Console.WriteLine();
+
+            System.Console.Write("Enter Order Number to modify: ");
+            string? orderNumber = System.Console.ReadLine();
+
+            System.Console.WriteLine("\n=== New Order Items (replaces all current items) ===");
+            System.Console.WriteLine("Available Products:");
+            System.Console.WriteLine("  AB1234 - Laptop ($999.99)");
+            System.Console.WriteLine("  CD5678 - Mouse ($29.99)");
+            System.Console.WriteLine("  EF9012 - Keyboard ($79.99)");
+            System.Console.WriteLine("  GH3456 - Monitor ($299.99)");
+            System.Console.WriteLine("  IJ7890 - Headphones ($149.99)");
+            System.Console.WriteLine();
+
+            List<UnvalidatedOrderLine> newOrderLines = ReadOrderLines();
+
+            if (newOrderLines.Count == 0)
+            {
+                System.Console.WriteLine("\nNo products specified. Modification cancelled.");
+                System.Console.ReadKey();
+                return;
+            }
+
+            // Create command and execute workflow
+            ModifyOrderCommand command = new(orderNumber!, newOrderLines);
+            ModifyOrderWorkflow workflow = new();
+            IOrderModifiedEvent result = workflow.Execute(
+                command,
+                CheckOrderExists,
+                CheckProductCatalog,
+                CheckInventory
+            );
+
+            // Display result
+            System.Console.WriteLine("\n========================================");
+            System.Console.WriteLine("MODIFICATION RESULT:");
+            System.Console.WriteLine("========================================");
+
+            string message = result switch
+            {
+                OrderModifiedSuccessEvent successEvent => HandleModifyOrderSuccess(successEvent),
+                OrderModifiedFailedEvent failedEvent => FormatModifyOrderFailure(failedEvent),
+                _ => throw new NotImplementedException()
+            };
+
+            System.Console.WriteLine(message);
+            System.Console.WriteLine("\nPress any key to continue...");
+            System.Console.ReadKey();
+        }
+
         private static void ViewPlacedOrders()
         {
             System.Console.Clear();
@@ -237,6 +313,21 @@ Order placed on: {@event.PlacedDate:g}";
             return $@"✓ ORDER CANCELLED SUCCESSFULLY!
 {@event.Summary}";
         }
+        private static string HandleModifyOrderSuccess(OrderModifiedSuccessEvent @event)
+        {
+            // Update the order in our simulated database
+            if (Orders.ContainsKey(@event.OrderNumber))
+            {
+                var order = Orders[@event.OrderNumber];
+                Orders[@event.OrderNumber] = new OrderDetails(
+                    order.TotalAmount,
+                    order.OrderDate,
+                    "Confirmed"
+                );
+            }
+            return $@"✓ ORDER MODIFIED SUCCESSFULLY!
+{@event.Summary}";
+        }
         private static string FormatPlaceOrderFailure(OrderPlacedFailedEvent @event)
         {
             return $@"✗ ORDER FAILED
@@ -249,6 +340,13 @@ Please correct the errors and try again.";
             return $@"✗ CANCELLATION FAILED
 Error: {@event.Reason}
 Please check the information and try again.";
+        }
+        private static string FormatModifyOrderFailure(OrderModifiedFailedEvent @event)
+        {
+            return $@"✗ MODIFICATION FAILED
+The following errors occurred:
+{string.Join("\n", @event.Reasons.Select(r => $"  • {r}"))}
+Please correct the errors and try again.";
         }
     }
 }
