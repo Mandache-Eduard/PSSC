@@ -3,6 +3,7 @@ using OrderManagement.Data.Models;
 using OrderManagement.Domain.Models;
 using OrderManagement.Domain.Repositories;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using static OrderManagement.Domain.Models.CancelOrderRequest;
@@ -17,6 +18,24 @@ namespace OrderManagement.Data.Repositories
         public OrdersRepository(OrderManagementContext context)
         {
             _context = context;
+        }
+
+        public async Task<IEnumerable<OrderSummary>> GetAllOrdersAsync()
+        {
+            var orders = await _context.Orders
+                .AsNoTracking()
+                .OrderByDescending(o => o.OrderDate)
+                .Select(o => new OrderSummary(
+                    o.OrderNumber,
+                    o.TotalAmount,
+                    o.Status,
+                    o.OrderDate,
+                    o.City,
+                    o.Country
+                ))
+                .ToListAsync();
+
+            return orders;
         }
 
         public async Task<(bool exists, OrderDetails? details)> GetOrderByNumberAsync(OrderNumber orderNumber)
