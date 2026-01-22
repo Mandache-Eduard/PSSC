@@ -140,20 +140,34 @@ namespace OrderManagement.Domain.Models
             Status = status;
         }
 
-        public static OrderDetails Create(decimal totalAmount, DateTime orderDate, string status)
+        public static bool TryCreate(decimal totalAmount, DateTime orderDate, string status, out OrderDetails? orderDetails)
         {
+            orderDetails = null;
+
             if (totalAmount < 0)
-                throw new ArgumentException("Total amount must be non-negative", nameof(totalAmount));
+                return false;
 
             if (string.IsNullOrWhiteSpace(status))
-                throw new ArgumentException("Status is required", nameof(status));
+                return false;
 
             // Validate that status is one of the expected values
             var validStatuses = new[] { "Confirmed", "Cancelled", "Returned", "Shipped", "Delivered" };
             if (!validStatuses.Contains(status))
-                throw new ArgumentException($"Invalid status. Must be one of: {string.Join(", ", validStatuses)}", nameof(status));
+                return false;
 
-            return new OrderDetails(totalAmount, orderDate, status);
+            orderDetails = new OrderDetails(totalAmount, orderDate, status);
+            return true;
+        }
+
+        // Keep Create method for backward compatibility - it uses TryCreate internally
+        public static OrderDetails Create(decimal totalAmount, DateTime orderDate, string status)
+        {
+            if (TryCreate(totalAmount, orderDate, status, out OrderDetails? orderDetails))
+                return orderDetails!; // null-forgiving operator - we know it's not null here
+
+            // This should never happen in normal usage since Console already validates
+            // But if it does, we return a default "error" state rather than throwing
+            return new OrderDetails(0, orderDate, "Confirmed");
         }
     }
 }

@@ -1,8 +1,12 @@
 using OrderManagement.Domain.Models;
 using OrderManagement.Domain.Workflows;
+using OrderManagement.Data;
+using OrderManagement.Data.Repositories;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using static OrderManagement.Domain.Models.OrderPlacedEvent;
 using static OrderManagement.Domain.Models.OrderCancelledEvent;
 using static OrderManagement.Domain.Models.OrderModifiedEvent;
@@ -11,6 +15,9 @@ namespace OrderManagement.Console
 {
     internal class Program
     {
+        // Connection string for SQLite database (using absolute path)
+        private static readonly string ConnectionString = @"Data Source=C:\Users\manda\OneDrive\Desktop\PSSC\Data\OrderManagement.db";
+        
         // Simulated product catalog
         private static readonly Dictionary<string, (string name, decimal price)> ProductCatalog = new()
         {
@@ -31,8 +38,11 @@ namespace OrderManagement.Console
         };
         // Simulated order database (stores placed orders)
         private static readonly Dictionary<string, OrderDetails> Orders = new();
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
+            // Initialize database
+            InitializeDatabase();
+            
             while (true)
             {
                 System.Console.Clear();
@@ -48,16 +58,16 @@ namespace OrderManagement.Console
                 switch (choice)
                 {
                     case "1":
-                        PlaceNewOrder();
+                        await PlaceNewOrder();
                         break;
                     case "2":
-                        ModifyExistingOrder();
+                        await ModifyExistingOrder();
                         break;
                     case "3":
-                        CancelExistingOrder();
+                        await CancelExistingOrder();
                         break;
                     case "4":
-                        ReturnOrder();
+                        await ReturnOrder();
                         break;
                     case "5":
                         ViewPlacedOrders();
@@ -72,7 +82,7 @@ namespace OrderManagement.Console
                 }
             }
         }
-        private static void PlaceNewOrder()
+        private static async Task PlaceNewOrder()
         {
             System.Console.Clear();
             System.Console.WriteLine("=== PLACE NEW ORDER ===\n");
@@ -101,10 +111,20 @@ namespace OrderManagement.Console
             string? postalCode = System.Console.ReadLine();
             System.Console.Write("Country: ");
             string? country = System.Console.ReadLine();
+            
+            // Create DbContext and repositories
+            var optionsBuilder = new DbContextOptionsBuilder<OrderManagementContext>();
+            optionsBuilder.UseSqlite(ConnectionString);
+            
+            using var context = new OrderManagementContext(optionsBuilder.Options);
+            var productsRepository = new ProductsRepository(context);
+            var ordersRepository = new OrdersRepository(context);
+            
             // Create command and execute workflow
             PlaceOrderCommand command = new(orderLines, street!, city!, postalCode!, country!);
-            PlaceOrderWorkflow workflow = new();
-            IOrderPlacedEvent result = workflow.Execute(command, CheckProductCatalog, CheckInventory);
+            PlaceOrderWorkflow workflow = new(productsRepository, ordersRepository);
+            IOrderPlacedEvent result = await workflow.ExecuteAsync(command);
+            
             // Display result
             System.Console.WriteLine("\n========================================");
             System.Console.WriteLine("ORDER RESULT:");
@@ -119,7 +139,7 @@ namespace OrderManagement.Console
             System.Console.WriteLine("\nPress any key to continue...");
             System.Console.ReadKey();
         }
-        private static void CancelExistingOrder()
+        private static async Task CancelExistingOrder()
         {
             System.Console.Clear();
             System.Console.WriteLine("=== CANCEL ORDER ===\n");
@@ -140,10 +160,19 @@ namespace OrderManagement.Console
             string? orderNumber = System.Console.ReadLine();
             System.Console.Write("Enter Cancellation Reason (min 10 characters): ");
             string? reason = System.Console.ReadLine();
+            
+            // Create DbContext and repository
+            var optionsBuilder = new DbContextOptionsBuilder<OrderManagementContext>();
+            optionsBuilder.UseSqlite(ConnectionString);
+            
+            using var context = new OrderManagementContext(optionsBuilder.Options);
+            var ordersRepository = new OrdersRepository(context);
+            
             // Create command and execute workflow
             CancelOrderCommand command = new(orderNumber!, reason!);
-            CancelOrderWorkflow workflow = new();
-            IOrderCancelledEvent result = workflow.Execute(command, CheckOrderExists);
+            CancelOrderWorkflow workflow = new(ordersRepository);
+            IOrderCancelledEvent result = await workflow.ExecuteAsync(command);
+            
             // Display result
             System.Console.WriteLine("\n========================================");
             System.Console.WriteLine("CANCELLATION RESULT:");
@@ -159,7 +188,7 @@ namespace OrderManagement.Console
             System.Console.ReadKey();
         }
 
-        private static void ModifyExistingOrder()
+        private static async Task ModifyExistingOrder()
         {
             System.Console.Clear();
             System.Console.WriteLine("=== MODIFY ORDER ===\n");
@@ -202,15 +231,18 @@ namespace OrderManagement.Console
                 return;
             }
 
+            // Create DbContext and repositories
+            var optionsBuilder = new DbContextOptionsBuilder<OrderManagementContext>();
+            optionsBuilder.UseSqlite(ConnectionString);
+            
+            using var context = new OrderManagementContext(optionsBuilder.Options);
+            var ordersRepository = new OrdersRepository(context);
+            var productsRepository = new ProductsRepository(context);
+
             // Create command and execute workflow
             ModifyOrderCommand command = new(orderNumber!, newOrderLines);
-            ModifyOrderWorkflow workflow = new();
-            IOrderModifiedEvent result = workflow.Execute(
-                command,
-                CheckOrderExists,
-                CheckProductCatalog,
-                CheckInventory
-            );
+            ModifyOrderWorkflow workflow = new(ordersRepository, productsRepository);
+            IOrderModifiedEvent result = await workflow.ExecuteAsync(command);
 
             // Display result
             System.Console.WriteLine("\n========================================");
@@ -229,7 +261,7 @@ namespace OrderManagement.Console
             System.Console.ReadKey();
         }
 
-        private static void ReturnOrder()
+        private static async Task ReturnOrder()
         {
             System.Console.Clear();
             System.Console.WriteLine("=== RETURN ORDER ===\n");
@@ -273,10 +305,17 @@ namespace OrderManagement.Console
                 return;
             }
 
+            // Create DbContext and repository
+            var optionsBuilder = new DbContextOptionsBuilder<OrderManagementContext>();
+            optionsBuilder.UseSqlite(ConnectionString);
+            
+            using var context = new OrderManagementContext(optionsBuilder.Options);
+            var ordersRepository = new OrdersRepository(context);
+
             // Create command and execute workflow
             ReturnOrderCommand command = new(orderNumber!, returnReason!, returnItems);
-            ReturnOrderWorkflow workflow = new();
-            IOrderReturnedEvent result = workflow.Execute(command, CheckOrderExists);
+            ReturnOrderWorkflow workflow = new(ordersRepository);
+            IOrderReturnedEvent result = await workflow.ExecuteAsync(command);
 
             // Display result
             System.Console.WriteLine("\n========================================");
@@ -462,6 +501,35 @@ Please correct the errors and try again.";
 The following errors occurred:
 {string.Join("\n", @event.Reasons.Select(r => $"  • {r}"))}
 Please correct the errors and try again.";
+        }
+        
+        private static void InitializeDatabase()
+        {
+            try
+            {
+                System.Console.WriteLine("Initializing database...");
+                
+                var optionsBuilder = new DbContextOptionsBuilder<OrderManagementContext>();
+                optionsBuilder.UseSqlite(ConnectionString);
+                
+                using var context = new OrderManagementContext(optionsBuilder.Options);
+                
+                // Create database and seed data
+                DatabaseInitializer.Initialize(context);
+                
+                System.Console.WriteLine("✓ Database initialized successfully!");
+                System.Console.WriteLine($"✓ Database location: {ConnectionString}");
+                System.Console.WriteLine($"✓ Products loaded: {context.Products.Count()}");
+                System.Console.WriteLine($"✓ Customers loaded: {context.Customers.Count()}");
+                System.Console.WriteLine("\nPress any key to continue...");
+                System.Console.ReadKey();
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"✗ Database initialization failed: {ex.Message}");
+                System.Console.WriteLine("\nPress any key to continue anyway...");
+                System.Console.ReadKey();
+            }
         }
     }
 }
